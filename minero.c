@@ -32,14 +32,16 @@ int main(int argc, char **argv){
     rounds = (int) argv[1];
     threads = (int) argv[2];
     target = (int) argv[3];
+  
+    search_area = (long) ceil(((float) POW_LIMIT)/threads);
+    if (!(thread = (pthread_t *) calloc(sizeof(pthread_t),threads))){
+        printf("Error allocating memory");
+        return -1;
+    }
     
     for(i = 0; i<rounds; i++){
         solution = -1;
-        search_area = (long) ceil(((float) POW_LIMIT)/threads);
-        if (!(thread = (pthread_t *) calloc(sizeof(pthread_t),threads))){
-            printf("Error allocating memory");
-            return -1;
-        }
+        
         /*Crear hilos*/
         for(j = 0; j<threads; j++){
             s->lower = search_area*j;
@@ -55,5 +57,9 @@ int main(int argc, char **argv){
                 exit(EXIT_FAILURE);
             }
         }
+        sprintf(stdout, "Solution: %ld\tTarget: %ld\n", solution, target);
+        target = solution;
     }
+  free(threads); 
+  exit(EXIT_SUCCESS);
 }
