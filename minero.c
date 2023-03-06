@@ -36,7 +36,7 @@ int main(int argc, char **argv){
     }
     rounds = atoi(argv[0]);
     threads = atoi(argv[1]);
-    target =  atoi(argv[2]);
+    target = atoi(argv[2]);
   
     search_area = (long) ceil(((float) POW_LIMIT)/threads);
 
