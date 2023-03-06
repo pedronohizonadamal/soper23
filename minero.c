@@ -29,13 +29,14 @@ int main(int argc, char **argv){
     Search_space *s;
     pthread_t *thread;
 
-    if(argc != 4){
-        printf("Not enough arguments passed");
+    /*nota: esto solo funciona si llamamos a minero desde un execv*/
+    if(argc != 3){
+        printf("Not enough arguments passed to miner; %d arguments passed\n", argc);
         return -1;
     }
-    rounds = atoi(argv[1]);
-    threads = atoi(argv[2]);
-    target =  atoi(argv[3]);
+    rounds = atoi(argv[0]);
+    threads = atoi(argv[1]);
+    target =  atoi(argv[2]);
   
     search_area = (long) ceil(((float) POW_LIMIT)/threads);
 
