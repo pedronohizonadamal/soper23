@@ -28,12 +28,27 @@ int main(int argc, char **argv){
     long int target, search_area;
     Search_space *s;
     pthread_t *thread;
+    pid_t monitor_id;
+    int monitor_status;
+    void *null_param = NULL;
 
     /*nota: esto solo funciona si llamamos a minero desde un execv*/
     if(argc != 3){
         printf("Not enough arguments passed to miner; %d arguments passed\n", argc);
         return -1;
     }
+
+    monitor_id = fork();
+    if (monitor_id < 0) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    } else if (monitor_id == 0) {
+        if (execvp("./monitor", null_param)) {
+        perror("execvp");
+        exit(EXIT_FAILURE);
+        }
+    }
+
     rounds = atoi(argv[0]);
     threads = atoi(argv[1]);
     target = atoi(argv[2]);
@@ -78,5 +93,7 @@ int main(int argc, char **argv){
     }
   free(thread); 
   free(s);
+  wait(&monitor_status);
+  printf("Monitor exited with status %d\n", monitor_status);
   exit(EXIT_SUCCESS);
 }

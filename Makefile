@@ -3,11 +3,12 @@ CFLAGS = -Wall -pedantic
 LIBS = -lm -lpthread
 MIN = minero
 PRIN = principal
+MON = monitor
 
 .PHONY: all clear clean
 
 clean:
-	rm -f *.o $(MIN)
+	rm -f *.o $(PRIN) $(MIN) $(MON)
 
 $(MIN): minero.o pow.o
 	$(CC) $(CFLAGS) $^ -o $@ -lm -lpthread
@@ -15,7 +16,10 @@ $(MIN): minero.o pow.o
 $(PRIN): principal.o
 	$(CC) $(CFLAGS) $^ -o $@
 
-all: clean $(MIN) $(PRIN)
+$(MON): monitor.o
+	$(CC) $(CFLAGS) $^ -o $@
+
+all: clean $(MIN) $(PRIN) $(MON)
 
 pow.o: pow.c pow.h
 	$(CC) $(CFLAGS) -c $<
@@ -24,6 +28,9 @@ minero.o: minero.c minero.h
 	$(CC) $(CFLAGS) -c $<
 
 principal.o: principal.c
+	$(CC) $(CFLAGS) -c $<
+
+monitor.o: monitor.c
 	$(CC) $(CFLAGS) -c $<
 
 #gcc minero.c minero.h pow.c pow.h -o minero -lm

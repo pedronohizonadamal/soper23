@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <math.h>
 
