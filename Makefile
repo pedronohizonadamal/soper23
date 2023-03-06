@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -pedantic
-LIBS = -lpthread
+LIBS = -lm -lpthread
 EXE = minero
 
 .PHONY: all clear clean
@@ -8,12 +8,15 @@ EXE = minero
 clean:
 	rm -f *.o $(EXE)
 
-$(EXE): minero.c pow.o
+$(EXE): minero.o pow.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBFLAGS)
 
 all: clean $(EXE)
 
 pow.o: pow.c pow.h
 	$(CC) $(CFLAGS) -c $<
-	
 
+minero.o: minero.c minero.h
+	$(CC) $(CFLAGS) -c $<
+
+#gcc minero.c minero.h pow.c pow.h -o minero -lm

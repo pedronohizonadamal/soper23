@@ -12,7 +12,7 @@
 #ifndef _POW_H
 #define _POW_H
 
-#define POW_LIMIT 99997669 /*!< Maximum number for the hash result. */
+#define POW_LIMIT 99997669 /*!< Maximum number for the hash result. 99997669 */ 
 
 /**
  * @brief Computes the following hash function:
