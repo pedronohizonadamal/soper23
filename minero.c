@@ -1,5 +1,4 @@
 #include "minero.h"
-#include <math.h>
 
 struct _Search_space
 {
@@ -29,9 +28,7 @@ int main(int argc, char **argv){
     long int targetMonitor, solutionMonitor;
     Search_space *s;
     pthread_t *thread;
-    pid_t monitor_id;
     int monitor_status = 0;
-    void *null_param = NULL;
 
     int pipeToMonitor1[2], pipeToMonitor2[2], pipeToMiner[2];
 
@@ -56,20 +53,9 @@ int main(int argc, char **argv){
         return -1;
     }
 
-    monitor_id = fork();
-    if (monitor_id < 0) {
-        perror("fork");
-        exit(EXIT_FAILURE);
-    } else if (monitor_id == 0) {
-        if (execvp("./monitor", null_param)) {
-        perror("execvp");
-        exit(EXIT_FAILURE);
-        }
-    }
-
-    rounds = atoi(argv[0]);
-    threads = atoi(argv[1]);
-    target = atoi(argv[2]);
+    target = atoi(argv[0]);
+    rounds = atoi(argv[1]);
+    threads = atoi(argv[2]);
   
     search_area = (long) ceil(((float) POW_LIMIT)/threads);
 
