@@ -24,17 +24,35 @@ void *search(void *s){
 }
 
 int main(int argc, char **argv){
-    int rounds, threads, i, j;
+    int rounds, threads, i, j, res, resMonitor;
     long int target, search_area;
+    long int targetMonitor, solutionMonitor;
     Search_space *s;
     pthread_t *thread;
     pid_t monitor_id;
-    int monitor_status;
+    int monitor_status = 0;
     void *null_param = NULL;
+
+    int pipeToMonitor1[2], pipeToMonitor2[2], pipeToMiner[2];
+
+    if(pipe(pipeToMonitor1) == -1) {
+        printf("Pipe error\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if(pipe(pipeToMonitor2) == -1) {
+        printf("Pipe error\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if(pipe(pipeToMiner) == -1) {
+        printf("Pipe error\n");
+        exit(EXIT_FAILURE);
+    }
 
     /*nota: esto solo funciona si llamamos a minero desde un execv*/
     if(argc != 3){
-        printf("Not enough arguments passed to miner; %d arguments passed\n", argc);
+        printf("Not enough arguments passed to miner; %d arguments passed\nUsage: <<rounds>> <<threads>> <<target>>\n", argc);
         return -1;
     }
 
@@ -88,12 +106,69 @@ int main(int argc, char **argv){
                 exit(EXIT_FAILURE);
             }
         }
-        printf("Solution: %ld\tTarget: %ld\n", solution, target);
+
+        
+        if (fork() != 0) {
+
+            // The parent sends an answer to the child
+            close(pipeToMonitor1[0]);
+            close(pipeToMonitor2[0]);
+
+            write(pipeToMonitor1[1], &solution, sizeof(solution));
+            write(pipeToMonitor2[1], &target, sizeof(target));
+
+            close(pipeToMonitor1[1]);
+            close(pipeToMonitor2[1]);
+
+            //The parent receives an answer from the child
+            close(pipeToMiner[1]);
+
+            read(pipeToMiner[0], &res, sizeof(res));
+
+            close(pipeToMiner[0]);
+        }
+
+        else {
+
+            //The child receives an answer and calls check()
+            close(pipeToMonitor1[1]);
+            close(pipeToMonitor2[1]);
+
+            read(pipeToMonitor1[0], &solutionMonitor, sizeof(solutionMonitor));
+            read(pipeToMonitor2[0], &targetMonitor, sizeof(targetMonitor));
+
+            close(pipeToMonitor1[0]);
+            close(pipeToMonitor2[0]);
+
+            //The child calls check()
+            res=check(solutionMonitor, targetMonitor);
+
+            //The child sends a response back
+            close(pipeToMiner[0]);
+
+            write(pipeToMiner[1], &resMonitor, sizeof(resMonitor));
+
+            close(pipeToMiner[1]);
+
+            exit(0);
+        }
+
+        if (res == 1) {
+            printf("Solution accepted: %08ld --> %08ld\n", target, solution);
+        }
+        else {
+            printf("Solution rejected: %08ld !-> %08ld\n", target, solution);
+            printf("The solution has been invalidated\n");
+            break;
+        }
+
         target = solution;
+        
+
     }
   free(thread); 
   free(s);
-  wait(&monitor_status);
   printf("Monitor exited with status %d\n", monitor_status);
+  if (res == 0) exit(EXIT_FAILURE);
   exit(EXIT_SUCCESS);
 }

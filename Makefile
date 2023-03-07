@@ -10,16 +10,16 @@ MON = monitor
 clean:
 	rm -f *.o $(PRIN) $(MIN) $(MON)
 
-$(MIN): minero.o pow.o
+$(MIN): minero.o pow.o monitor.o
 	$(CC) $(CFLAGS) $^ -o $@ -lm -lpthread
 
 $(PRIN): principal.o
 	$(CC) $(CFLAGS) $^ -o $@
 
-$(MON): monitor.o
+$(MON): monitor.o pow.o
 	$(CC) $(CFLAGS) $^ -o $@
 
-all: clean $(MIN) $(PRIN) $(MON)
+all: clean $(MIN) $(PRIN)
 
 pow.o: pow.c pow.h
 	$(CC) $(CFLAGS) -c $<
@@ -30,7 +30,7 @@ minero.o: minero.c minero.h
 principal.o: principal.c
 	$(CC) $(CFLAGS) -c $<
 
-monitor.o: monitor.c
+monitor.o: monitor.c monitor.h
 	$(CC) $(CFLAGS) -c $<
 
 #gcc minero.c minero.h pow.c pow.h -o minero -lm
