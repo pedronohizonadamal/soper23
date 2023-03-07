@@ -20,7 +20,7 @@ void *search(void *s){
         }
     }
     pthread_exit((void *) &not_found);
-}
+} 
 
 int main(int argc, char **argv){
     int rounds, threads, i, j, res, resMonitor;
