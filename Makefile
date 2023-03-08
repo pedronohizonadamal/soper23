@@ -26,6 +26,3 @@ minero.o: minero.c minero.h
 
 principal.o: principal.c
 	$(CC) $(CFLAGS) -c $<
-
-
-#gcc minero.c minero.h pow.c pow.h -o minero -lm
