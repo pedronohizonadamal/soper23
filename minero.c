@@ -23,25 +23,20 @@ void *search(void *s){
 } 
 
 int main(int argc, char **argv){
-    int rounds, threads, i, j, res, resMonitor;
+    int rounds, threads, i, j;
     long int target, search_area;
-    long int targetMonitor, solutionMonitor;
     Search_space *s;
     pthread_t *thread;
     int monitor_status = 0;
+    char confirmation_code;
+    int exit_code = EXIT_SUCCESS;
 
-    int pipeToMonitor1[2], pipeToMonitor2[2], pipeToMiner[2];
+    int pipeToMonitor[2], pipeToMiner[2];
 
-    if(pipe(pipeToMonitor1) == -1) {
+    if(pipe(pipeToMonitor) == -1) {
         printf("Pipe error\n");
         exit(EXIT_FAILURE);
     }
-
-    if(pipe(pipeToMonitor2) == -1) {
-        printf("Pipe error\n");
-        exit(EXIT_FAILURE);
-    }
-
     if(pipe(pipeToMiner) == -1) {
         printf("Pipe error\n");
         exit(EXIT_FAILURE);
@@ -56,10 +51,44 @@ int main(int argc, char **argv){
     target = atoi(argv[0]);
     rounds = atoi(argv[1]);
     threads = atoi(argv[2]);
-  
+
+    if (fork() == 0) {
+        /*Monitor process*/
+        close(pipeToMonitor[1]);
+        close(pipeToMiner[0]);
+        do{
+            if (read(pipeToMonitor[0],&solution,sizeof(solution)) == 0){
+                break;
+            }
+            if (read(pipeToMonitor[0],&target,sizeof(target)) == 0){
+                break;
+            }
+
+            if(pow_hash(solution) == target){
+                printf("Solution accepted: %08ld --> %08ld\n", target, solution);
+                confirmation_code = 'O';
+                
+            } else {
+                confirmation_code = 'E';
+                printf("Solution rejected: %08ld !-> %08ld\n", target, solution);
+            }
+            write(pipeToMiner[1],&confirmation_code,sizeof(char));
+        } while (1);
+
+        close(pipeToMonitor[0]);
+        close(pipeToMiner[1]);
+
+        exit(EXIT_SUCCESS);
+    } else {
+        /*Miner process*/
+        // Close unused access
+        close(pipeToMonitor[0]);
+        close(pipeToMiner[1]);
+    }
+
     search_area = (long) ceil(((float) POW_LIMIT)/threads);
 
-    /*allocare memory*/
+    /*allocate memory*/
     if (!(thread = (pthread_t *) malloc(sizeof(pthread_t)*threads))){
         printf("Error allocating memory");
         return -1;
@@ -92,69 +121,31 @@ int main(int argc, char **argv){
                 exit(EXIT_FAILURE);
             }
         }
-
         
-        if (fork() != 0) {
+        /*Escribir a monitor con la solución*/
+        write(pipeToMonitor[1], &solution, sizeof(solution));
+        write(pipeToMonitor[1], &target, sizeof(target));
 
-            // The parent sends an answer to the child
-            close(pipeToMonitor1[0]);
-            close(pipeToMonitor2[0]);
-
-            write(pipeToMonitor1[1], &solution, sizeof(solution));
-            write(pipeToMonitor2[1], &target, sizeof(target));
-
-            close(pipeToMonitor1[1]);
-            close(pipeToMonitor2[1]);
-
-            //The parent receives an answer from the child
-            close(pipeToMiner[1]);
-
-            read(pipeToMiner[0], &res, sizeof(res));
-
-            close(pipeToMiner[0]);
+        /*Esperar repuesta*/
+        if (read(pipeToMiner[0], &confirmation_code, sizeof(confirmation_code)) == 0){
+            printf("Error reading from pipe\n");
+            exit(EXIT_FAILURE);
         }
-
-        else {
-
-            //The child receives an answer and calls check()
-            close(pipeToMonitor1[1]);
-            close(pipeToMonitor2[1]);
-
-            read(pipeToMonitor1[0], &solutionMonitor, sizeof(solutionMonitor));
-            read(pipeToMonitor2[0], &targetMonitor, sizeof(targetMonitor));
-
-            close(pipeToMonitor1[0]);
-            close(pipeToMonitor2[0]);
-
-            //The child calls check()
-            res=check(solutionMonitor, targetMonitor);
-
-            //The child sends a response back
-            close(pipeToMiner[0]);
-
-            write(pipeToMiner[1], &resMonitor, sizeof(resMonitor));
-
-            close(pipeToMiner[1]);
-
-            exit(0);
-        }
-
-        if (res == 1) {
-            printf("Solution accepted: %08ld --> %08ld\n", target, solution);
-        }
-        else {
-            printf("Solution rejected: %08ld !-> %08ld\n", target, solution);
+        if(confirmation_code == 'O'){
+            target = solution;
+        } else {
             printf("The solution has been invalidated\n");
+            exit_code = EXIT_FAILURE;
             break;
         }
 
-        target = solution;
-        
-
     }
+    /*free memory, close pipes and wait*/
+  close(pipeToMiner[0]);
+  close(pipeToMonitor[1]);
   free(thread); 
   free(s);
-  printf("Monitor exited with status %d\n", monitor_status);
-  if (res == 0) exit(EXIT_FAILURE);
-  exit(EXIT_SUCCESS);
+  wait(&monitor_status);
+  printf("Monitor exited with status %d\n", WEXITSTATUS(monitor_status));
+  exit(exit_code);
 }
