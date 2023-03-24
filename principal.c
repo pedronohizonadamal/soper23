@@ -6,6 +6,7 @@
 int main(int argc, char **argv) {
   pid_t pid;
   int status;
+  
 
   if(argc != 4){
         printf("Not enough arguments passed to principal\n");
