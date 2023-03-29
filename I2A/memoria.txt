@@ -1,0 +1,7 @@
+Hacemos dos wait() porque el handler del SIGINT en el proceso principal supone la finalización controlada del programa,
+de modo que es preciso esperar a los procesos hijo al igual que con la finalización habitual. Podríamos handlear la señal 
+y continuar con el normal fucnionamiento del programa, pero consideramos que esta decisión se ajusta más al uso habitual 
+la señal SIGINT y que supone un código 'más ordenado'.
+
+
+/* Cronica de una muerte anunciada */
