@@ -9,4 +9,7 @@
 #include <sys/wait.h>
 
 int gpid = -1;
-sem_t mutex;
+int Finalizar_ejecucion = 0;
+int usr1_arrived = 0, usr2_arrived = 0;
+int im_candidate = 0;
+sem_t *mutex, *file_mutex, *candidate, *n_votantes;
