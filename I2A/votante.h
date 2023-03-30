@@ -13,6 +13,8 @@
 #define REGISTER "Register.txt"
 #define LINE_BUFFER 256
 #define WAITING_TIME {0,1000}
+#define WAITING_ROUND {0, 250000}
+#define WAITING_AUX {0, 20000}
 #define RESULTS_SIZE 4096
 
 void start_round();

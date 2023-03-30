@@ -52,7 +52,6 @@ int main(int argc, char **argv)
   FILE *f=NULL;
   struct sigaction act, alrmhandler;
 
-
   if (argc != 3)
   {
     printf("Not enough arguments passed to principal\nUsage: <seconds> <processes>\n");
