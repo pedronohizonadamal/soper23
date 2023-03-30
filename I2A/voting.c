@@ -11,6 +11,10 @@
 int gpid = -1;
 sem_t *n_votantes = NULL;
 
+void close_semaphores(){
+  sem_unlink("voting_n_votantes");
+}
+
 void sigint_handler(int sig) {
     pid_t wpid;
     int status;
@@ -18,6 +22,7 @@ void sigint_handler(int sig) {
     kill(-1*gpid,SIGTERM);
     while ((wpid = wait(&status)) > 0);
     printf("Finishing by signal\n");
+    close_semaphores();
     exit(EXIT_SUCCESS);
 }
 
@@ -27,7 +32,8 @@ void sigalarm_handler(int sig){
   /*Send sig to every process in the group*/
   kill(-1*gpid,SIGTERM);
   while ((wpid = wait(&status)) > 0);
-  printf("Finishing by alarm"); 
+  printf("Finishing by alarm\n");
+  close_semaphores();
   exit(EXIT_SUCCESS);
 }
 
@@ -36,10 +42,6 @@ void init_semaphores(){
         perror("N_votantes semaphore error");
         exit(EXIT_FAILURE);
     }
-}
-
-void close_semaphores(){
-  sem_unlink("voting_n_votantes");
 }
 int main(int argc, char **argv)
 {
@@ -59,7 +61,7 @@ int main(int argc, char **argv)
   processes = atoi(argv[2]);
   seconds = atoi(argv[1]);
   
-  if (!(f = fopen("Register", "w"))){
+  if (!(f = fopen("Register.txt", "w"))){
     exit(EXIT_FAILURE);
   }
   init_semaphores();
@@ -87,7 +89,7 @@ int main(int argc, char **argv)
       }
       setpgid(pid, gpid);
       /*Print in register*/
-      fprintf(f, "%d\n", pid);
+      fprintf(f, "%d| \n", pid);
       
     }
   }
@@ -116,9 +118,11 @@ int main(int argc, char **argv)
   for(i = 0; i<processes; i++){
     sem_wait(n_votantes);
   }
+  printf("Todos los procesos listos\n");
 
   /*Send USR1*/
   kill(-1*gpid,SIGUSR1);
+
 
   if (alarm(seconds)){
     fprintf(stderr, "There is a previously established alarm\n");
