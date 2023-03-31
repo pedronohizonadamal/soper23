@@ -26,3 +26,4 @@ int Allow_term = 0;
 int usr1_arrived = 0, usr2_arrived = 0;
 sem_t *mutex, *file_mutex, *candidate, *n_votantes; 
 char *results;
+int ronda = 0;

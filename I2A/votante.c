@@ -9,6 +9,7 @@ void close_semaphores(){
 
 void safe_exit(int EXIT_TYPE) {
     close_semaphores();
+    printf("%d safe exit\n",getpid());
     exit(EXIT_TYPE);
 }
 
@@ -155,22 +156,22 @@ void start_round(sigset_t *usr1_sig, sigset_t *usr2_sig){
     FILE *f;
     
     while(!Finalizar_ejecucion){
+        usr1_arrived = 0;
+        usr2_arrived = 0;
         /*Luchar por ser el proceso candidato*/
-        Allow_term = 1;
+        ronda++;
+        Allow_term = 0;
         if (!sem_trywait(candidate)){
-            printf("Proceso %d es candidato\n",getpid());
+            printf("Proceso %d es candidato ed ronda %d\n",getpid(),ronda);
             /*Código del candidato*/
             printf("Gpid es %d\n",getpgid(getpid()));
             /*Wait for all voters*/
             for(i = 0; i<processes-1; i++){
                 sem_wait(n_votantes);
             }
-            /*Correct candidate sempahore*/
-            sem_post(candidate);
             /*Send USR2*/
             nanosleep(&waiting_aux,NULL);   /*OMEGASUS*/
             kill(-1*getpgid(getpid()),SIGUSR2);
-            Allow_term = 0;
             voting_finished = 0;
             while(voting_finished == 0){
                 /*Comprobar fichero*/
@@ -214,8 +215,11 @@ void start_round(sigset_t *usr1_sig, sigset_t *usr2_sig){
                         fwrite(read_vote, sizeof(char), 1, f);
                         fseek(f, 1, SEEK_CUR);
                     }
-                    printf("Round finished\n");
+                    printf("Round %d finished\n",ronda);
+                    Allow_term = 1;
                     nanosleep(&waiting_round,NULL);
+                    /*Correct candidate sempahore*/
+                    sem_post(candidate);
                     kill(-1*getpgid(getpid()),SIGUSR1);
                 }
                 fclose(f);
@@ -231,18 +235,17 @@ void start_round(sigset_t *usr1_sig, sigset_t *usr2_sig){
             
             sem_post(n_votantes);
 
-            printf("Process %d esperar Usr2\n",getpid());
+            printf("Process %d esperar Usr2 en ronda %d\n",getpid(),ronda);
             /*Señalizar que estoy listo y esperar a usr2*/
 
             if(usr2_arrived == 0){
                 sigsuspend(usr2_sig);
             }
             usr2_arrived = 0;
-            Allow_term = 0;
 
             votar();
             Allow_term = 1;
-            printf("Process %d ya ha votado Usr2\n",getpid());
+            printf("Process %d ya ha votado en %d\n",getpid(),ronda);
             /*Wait for USR1. If USR1 has arrived already, ignore this part*/
             if(usr1_arrived == 0){
                 sigsuspend(usr1_sig);
@@ -250,6 +253,5 @@ void start_round(sigset_t *usr1_sig, sigset_t *usr2_sig){
             usr1_arrived = 0;
         }
     }
-    printf("%d sale del bucle\n",getpid());
     safe_exit(EXIT_SUCCESS);
 }

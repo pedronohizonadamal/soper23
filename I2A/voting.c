@@ -117,7 +117,6 @@ int main(int argc, char **argv)
   for(i = 0; i<processes; i++){
     sem_wait(n_votantes);
   }
-  printf("Todos los procesos listos\n");
 
   /*Send USR1*/
   kill(-1*gpid,SIGUSR1);
