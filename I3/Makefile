@@ -1,22 +1,23 @@
 CC = gcc
 CFLAGS = -Wall -pedantic
-COM = comprobador
+PROMON = procesomonitor
 MON = monitor
-.PHONY: all
 
 clean:
-	rm -f *.o $(MON) $(COM)
+	rm -f *.o $(MON) $(PROMON)
 
-$(COM): comprobador.o
+.PHONY: all
+
+$(PROMON): procesomonitor.o
 	$(CC) $(CFLAGS) $^ -o $@
 
-$(MON): monitor.o
+$(MON): procesocomprobador.o
 	$(CC) $(CFLAGS) $^ -o $@
 
-all: $(MON) $(COM)
+all: $(MON) $(PROMON)
 
-monitor.o: monitor.c monitor.h
+procesomonitor.o: procesomonitor.c monitor.h
 	$(CC) $(CFLAGS) -c $<
 
-comprobador.o: comprobador.c monitor.h
+procesocomprobador.o: procesocomprobador.c monitor.h
 	$(CC) $(CFLAGS) -c $<
