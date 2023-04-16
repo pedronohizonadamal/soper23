@@ -1,7 +1,5 @@
 #include "monitor.h"
 
-int current_queue = 0;
-
 int main(int argc, char **argv){
     pid_t pid;
     int shm_mem;
@@ -48,6 +46,9 @@ int main(int argc, char **argv){
             exit(1);
         }
 
+        mem_queue->current_write = 0;
+        mem_queue->end = false;
+
         // Loop until we receive the special completion block
         while (!completion_flag) {
             // Receive a block
@@ -59,11 +60,15 @@ int main(int argc, char **argv){
                 completion_flag = 1;
             }
 
-            // FALTA ANADIR EL CONTADOR D LA COLA INTERNA (LOCAL)
-            mem_queue[current_queue % QUEUE_SIZE].flag = true;
-            current_mem = mem_queue[current_queue % QUEUE_SIZE];
-            current_queue++;
+            // Wait to avoid overwrting an unread block
+            while (mem_queue->current_write >= mem_queue->current_read + QUEUE_SIZE);
 
+            current_mem.flag = true;
+            current_mem.block = block;
+
+            mem_queue->queue[mem_queue->current_write % QUEUE_SIZE] = current_mem;
+            
+            mem_queue->current_write++;
 
             // Insert the block into shared memory
 
@@ -72,12 +77,24 @@ int main(int argc, char **argv){
         }
 
         // Insert the completion block into shared memory
-        mem->block = block;
+
+        // Wait to avoid overwrting an unread block
+        while (mem_queue->current_write >= mem_queue->current_read + QUEUE_SIZE);
+
+        current_mem.flag = true;
+        current_mem.block = block;
+
+        mem_queue->queue[mem_queue->current_write % QUEUE_SIZE] = current_mem;
+        
+        mem_queue->current_write++;
+
+        mem_queue->end = true;
 
         // Free resources and terminate
-        munmap(mem, sizeof(Memory));
+        munmap(mem_queue, sizeof(struct MemoryQueue));
         shm_unlink(SHARED_MEMORY_NAME);
         wait(NULL);
         exit(EXIT_SUCCESS);
         }
 }
+
