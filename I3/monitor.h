@@ -19,16 +19,20 @@
 #define IPC_RESULT_ERROR -1
 #define SHARED_MEMORY_NAME "monitor_shmem"
 #define COMPLETION_BLOCK "XD"
+#define INITAL_ANSWER 0
 
 #define QUEUE_SIZE 6
 
 struct Memory{
-    int block;
+    long block;
     bool flag;
 };
 
 struct MemoryQueue {
     struct Memory queue[QUEUE_SIZE];
+    int current_read;
+    int current_write;
+    bool end;
 };
 
 static int get_shared_block(char *filename, int size);
