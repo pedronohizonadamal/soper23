@@ -11,6 +11,7 @@
 #include <sys/mman.h>
 #include <unistd.h> 
 #include <sys/wait.h>
+#include <stdbool.h>
 
 #define SHMSZ 27
 #define SHMFILENAME "shmfile.h"
@@ -19,8 +20,15 @@
 #define SHARED_MEMORY_NAME "monitor_shmem"
 #define COMPLETION_BLOCK "XD"
 
+#define QUEUE_SIZE 6
+
 struct Memory{
     int block;
+    bool flag;
+};
+
+struct MemoryQueue {
+    struct Memory queue[QUEUE_SIZE];
 };
 
 static int get_shared_block(char *filename, int size);
@@ -69,6 +77,5 @@ bool destroy_memory_block(char *filename) {
 
 
 #endif
-
 
 
