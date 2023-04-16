@@ -16,6 +16,12 @@
 #define SHMFILENAME "shmfile.h"
 
 #define IPC_RESULT_ERROR -1
+#define SHARED_MEMORY_NAME "monitor_shmem"
+#define COMPLETION_BLOCK "XD"
+
+struct Memory{
+    int block;
+};
 
 static int get_shared_block(char *filename, int size);
 
