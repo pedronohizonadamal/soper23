@@ -41,6 +41,9 @@ struct Block{
 
 struct MemoryQueue {
     struct Block queue[QUEUE_SIZE];
+    sem_t mutex;
+    sem_t queue_space;
+    sem_t queue_blocks;
 };
 
 struct mq_attr attributes = {. mq_flags = 0 ,
@@ -54,5 +57,3 @@ long get_sol(long target);
 void init_semaphores(sem_t *mutex, sem_t *in, sem_t *out);
 
 #endif
-
-
