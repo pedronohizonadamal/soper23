@@ -2,10 +2,10 @@ CC = gcc
 LIB = -lrt
 CFLAGS = -Wall -pedantic
 MON = monitor
-MIN = minero
+MIN = miner
 
 clean:
-	rm -f *.o $(MON)
+	rm -f *.o $(MON) $(MIN)
 
 .PHONY: all
 

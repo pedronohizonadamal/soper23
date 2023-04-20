@@ -48,7 +48,7 @@ struct mq_attr attributes = {. mq_flags = 0 ,
     . mq_curmsgs = 0 ,
     . mq_msgsize = sizeof ( struct Block ) };
 
-void receive_block(struct Block *block, sem_t *miner_fill, sem_t *miner_empty, mqd_t queue);
+int receive_block(struct Block *block, mqd_t queue);
 void check_block(struct Block *block);
 long get_sol(long target);
 void init_semaphores(sem_t *mutex, sem_t *in, sem_t *out);
