@@ -61,7 +61,7 @@ int main(int argc, char **argv)
     // End
     printf("[%d] Finishing\n", (int)getpid());
     mq_close(queue);
-    mq_unlink(MQ_NAME);
+    /*mq_unlink(MQ_NAME);*/
     exit(EXIT_SUCCESS);
 }
 
