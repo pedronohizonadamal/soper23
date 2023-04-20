@@ -11,7 +11,6 @@ int main(int argc, char **argv)
     int completion_flag = 0;
     struct MemoryQueue *mem_queue = NULL;
     struct Block block;
-    sem_t *mutex, *queue_space, *queue_blocks;
     mqd_t queue;
 
     if (argc != 2)
@@ -30,38 +29,10 @@ int main(int argc, char **argv)
         shm_mem = shm_open(SHARED_MEMORY_NAME, O_RDWR, S_IRUSR | S_IWUSR);
     }
 
-    /*Init semaphores*/
-    if ((mutex = sem_open(SEMAPHORE_MUTEX, O_CREAT, S_IRUSR | S_IWUSR, 1)) == SEM_FAILED)
-    {
-        perror("Semaphore error");
-        close(shm_mem);
-        exit(EXIT_FAILURE);
-    }
-
-    if ((queue_space = sem_open(SEMAPHORE_MULTIPLEX_IN, O_CREAT, S_IRUSR | S_IWUSR, 6)) == SEM_FAILED)
-    {
-        perror("Semaphore error");
-        sem_unlink(SEMAPHORE_MUTEX);
-        close(shm_mem);
-        exit(EXIT_FAILURE);
-    }
-
-    if ((queue_blocks = sem_open(SEMAPHORE_MULTIPLEX_OUT, O_CREAT, S_IRUSR | S_IWUSR, 0)) == SEM_FAILED)
-    {
-        perror("Semaphore error");
-        sem_unlink(SEMAPHORE_MULTIPLEX_IN);
-        sem_unlink(SEMAPHORE_MUTEX);
-        close(shm_mem);
-        exit(EXIT_FAILURE);
-    }
-
     if (ftruncate(shm_mem, sizeof(struct MemoryQueue)) == -1)
     {
         perror("ftruncate");
         shm_unlink(SHARED_MEMORY_NAME);
-        sem_unlink(SEMAPHORE_MUTEX);
-        sem_unlink(SEMAPHORE_MULTIPLEX_IN);
-        sem_unlink(SEMAPHORE_MULTIPLEX_OUT);
         close(shm_mem);
         exit(EXIT_FAILURE);
     }
@@ -72,11 +43,13 @@ int main(int argc, char **argv)
     {
         perror("mmap");
         shm_unlink(SHARED_MEMORY_NAME);
+        /*
         sem_unlink(SEMAPHORE_MUTEX);
         sem_unlink(SEMAPHORE_MULTIPLEX_IN);
-        sem_unlink(SEMAPHORE_MULTIPLEX_OUT);
+        sem_unlink(SEMAPHORE_MULTIPLEX_OUT);*/
         exit(EXIT_FAILURE);
     }
+
 
     if (comprobador == false)
     {
@@ -86,11 +59,11 @@ int main(int argc, char **argv)
         while (!completion_flag)
         {
             // Read block from shared memory
-            sem_wait(queue_blocks);
-            sem_wait(mutex);
+            sem_wait(&mem_queue->queue_blocks);
+            sem_wait(&mem_queue->mutex);
             block = mem_queue->queue[queue_pos % QUEUE_SIZE];
-            sem_post(mutex);
-            sem_post(queue_space);
+            sem_post(&mem_queue->mutex);
+            sem_post(&mem_queue->queue_space);
             queue_pos++;
 
             // Check if the received block is the special completion block
@@ -115,6 +88,28 @@ int main(int argc, char **argv)
     }
     else
     {
+        if (sem_init(&mem_queue->mutex, 1, 1) == -1) {
+            perror("sem_init");
+            shm_unlink(SHARED_MEMORY_NAME);
+            exit(EXIT_FAILURE);
+        }
+
+
+        if (sem_init(&mem_queue->queue_space, 1, QUEUE_SIZE) == -1) {
+            perror("sem_init");
+            sem_destroy(&mem_queue->mutex);
+            shm_unlink(SHARED_MEMORY_NAME);
+            exit(EXIT_FAILURE);
+        }
+
+
+        if (sem_init(&mem_queue->queue_blocks, 1, 0) == -1) {
+            perror("sem_init");
+            sem_destroy(&mem_queue->mutex);
+            sem_destroy(&mem_queue->queue_space);
+            shm_unlink(SHARED_MEMORY_NAME);
+            exit(EXIT_FAILURE);
+        }
         // Proceso comprobador
         /*init_semaphores(mutex, queue_space, queue_blocks);*/
         printf("[%d] Checking blocks...\n", (int)getpid());
@@ -127,9 +122,10 @@ int main(int argc, char **argv)
             perror("Queue error");
             munmap(mem_queue, sizeof(struct MemoryQueue));
             shm_unlink(SHARED_MEMORY_NAME);
-            sem_unlink(SEMAPHORE_MUTEX);
-            sem_unlink(SEMAPHORE_MULTIPLEX_IN);
-            sem_unlink(SEMAPHORE_MULTIPLEX_OUT);
+            sem_destroy(&mem_queue->mutex);
+            sem_destroy(&mem_queue->queue_space);
+            sem_destroy(&mem_queue->queue_blocks);
+            shm_unlink(SHARED_MEMORY_NAME);
             exit(EXIT_FAILURE);
         }
 
@@ -154,26 +150,28 @@ int main(int argc, char **argv)
             }
 
             // Insert the block into shared memory
-            sem_wait(queue_space);
-            sem_wait(mutex);
+            sem_wait(&mem_queue->queue_space);
+            sem_wait(&mem_queue->mutex);
             mem_queue->queue[queue_pos % QUEUE_SIZE] = block;
-            sem_post(mutex);
-            sem_post(queue_blocks);
+            sem_post(&mem_queue->mutex);
+            sem_post(&mem_queue->queue_blocks);
             queue_pos++;
 
             // Wait. Wait isn't needed if about to end
             if(!completion_flag)
                 sleep(lag);
         }
+
+        sem_destroy(&mem_queue->mutex);
+        sem_destroy(&mem_queue->queue_space);
+        sem_destroy(&mem_queue->queue_blocks);
     }
     // Free resources and terminate
     printf("[%d] Finishing\n", (int)getpid());
     munmap(mem_queue, sizeof(struct MemoryQueue));
     shm_unlink(SHARED_MEMORY_NAME);
-    sem_unlink(SEMAPHORE_MUTEX);
-    sem_unlink(SEMAPHORE_MULTIPLEX_IN);
-    sem_unlink(SEMAPHORE_MULTIPLEX_OUT);
     mq_close(queue);
+    mq_unlink(MQ_NAME);
     exit(EXIT_SUCCESS);
 }
 
