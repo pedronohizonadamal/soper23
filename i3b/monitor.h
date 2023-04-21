@@ -54,6 +54,6 @@ struct mq_attr attributes = {. mq_flags = 0 ,
 int receive_block(struct Block *block, mqd_t queue);
 void check_block(struct Block *block);
 long get_sol(long target);
-void init_semaphores(sem_t *mutex, sem_t *in, sem_t *out);
+bool init_semaphores(sem_t *mutex, sem_t *space, sem_t *blocks);
 
 #endif

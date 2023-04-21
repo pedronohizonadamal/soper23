@@ -12,6 +12,7 @@ int main(int argc, char **argv)
     struct MemoryQueue *mem_queue = NULL;
     struct Block block;
     mqd_t queue;
+    pid_t pid;
 
     if (argc != 2)
     {
@@ -43,16 +44,24 @@ int main(int argc, char **argv)
     {
         perror("mmap");
         shm_unlink(SHARED_MEMORY_NAME);
-        /*
-        sem_unlink(SEMAPHORE_MUTEX);
-        sem_unlink(SEMAPHORE_MULTIPLEX_IN);
-        sem_unlink(SEMAPHORE_MULTIPLEX_OUT);*/
         exit(EXIT_FAILURE);
     }
 
+    if (init_semaphores(&mem_queue->mutex, &mem_queue->queue_space, &mem_queue->queue_blocks) == false)
+        //Probar con y sin unmap
+        exit(EXIT_FAILURE);
 
-    if (comprobador == false)
-    {
+    pid = fork();
+
+    if(pid < 0){
+        printf("Fork error\n");
+        munmap(mem_queue, sizeof(struct MemoryQueue));
+        sem_destroy(&mem_queue->mutex);
+        sem_destroy(&mem_queue->queue_space);
+        sem_destroy(&mem_queue->queue_blocks);
+        shm_unlink(SHARED_MEMORY_NAME);
+        exit(EXIT_FAILURE);
+    } else if (pid == 0){
         // Proceso monitor
         printf("[%d] Printing blocks...\n", (int)getpid());
         // Loop until we receive the special completion block
@@ -88,28 +97,6 @@ int main(int argc, char **argv)
     }
     else
     {
-        if (sem_init(&mem_queue->mutex, 1, 1) == -1) {
-            perror("sem_init");
-            shm_unlink(SHARED_MEMORY_NAME);
-            exit(EXIT_FAILURE);
-        }
-
-
-        if (sem_init(&mem_queue->queue_space, 1, QUEUE_SIZE) == -1) {
-            perror("sem_init");
-            sem_destroy(&mem_queue->mutex);
-            shm_unlink(SHARED_MEMORY_NAME);
-            exit(EXIT_FAILURE);
-        }
-
-
-        if (sem_init(&mem_queue->queue_blocks, 1, 0) == -1) {
-            perror("sem_init");
-            sem_destroy(&mem_queue->mutex);
-            sem_destroy(&mem_queue->queue_space);
-            shm_unlink(SHARED_MEMORY_NAME);
-            exit(EXIT_FAILURE);
-        }
         // Proceso comprobador
         /*init_semaphores(mutex, queue_space, queue_blocks);*/
         printf("[%d] Checking blocks...\n", (int)getpid());
@@ -171,6 +158,7 @@ int main(int argc, char **argv)
     shm_unlink(SHARED_MEMORY_NAME);
     mq_close(queue);
     mq_unlink(MQ_NAME);
+    wait(NULL);
     exit(EXIT_SUCCESS);
 }
 
@@ -197,13 +185,30 @@ int receive_block(struct Block *block, mqd_t queue)
     return 1;
 }
 
-void init_semaphores(sem_t *mutex, sem_t *in, sem_t *out)
+bool init_semaphores(sem_t *mutex, sem_t *space, sem_t *blocks)
 {
-    /*if (!(sem_init(mutex,1,1))){
-        perror("Semaphore error");
-        munmap(mem_queue, sizeof(struct MemoryQueue));
-        sem_unlink(MINER_CANDIDATE_QUEUE_IN);
-        sem_unlink(MINER_CANDIDATE_QUEUE_OUT);
-        exit(EXIT_FAILURE);
-    }*/
+    if (sem_init(mutex, 1, 1) == -1) {
+        perror("sem_init");
+        shm_unlink(SHARED_MEMORY_NAME);
+        return false;
+    }
+
+
+    if (sem_init(space, 1, QUEUE_SIZE) == -1) {
+        perror("sem_init");
+        sem_destroy(mutex);
+        shm_unlink(SHARED_MEMORY_NAME);
+        return false;
+    }
+
+
+    if (sem_init(blocks, 1, 0) == -1) {
+        perror("sem_init");
+        sem_destroy(mutex);
+        sem_destroy(space);
+        shm_unlink(SHARED_MEMORY_NAME);
+        return false;
+    }
+
+    return true;
 }
