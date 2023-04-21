@@ -121,7 +121,6 @@ int main(int argc, char **argv)
         {
             perror("Queue error");
             munmap(mem_queue, sizeof(struct MemoryQueue));
-            shm_unlink(SHARED_MEMORY_NAME);
             sem_destroy(&mem_queue->mutex);
             sem_destroy(&mem_queue->queue_space);
             sem_destroy(&mem_queue->queue_blocks);
