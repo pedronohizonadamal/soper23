@@ -14,6 +14,7 @@
 #include <stdbool.h>
 #include <semaphore.h>
 #include <mqueue.h>
+#include <signal.h>
 
 #define SHMSZ 27
 #define SHMFILENAME "shmfile.h"
@@ -32,9 +33,25 @@
 
 #define MQ_NAME "/m_queue"
 
+#define MAX_MINEROS 100
+
+struct Monedero {
+
+    int monedas;
+    pid_t pid;
+};
+
 struct Block{
+
+    int block_id;
     long int target;
     long int solution;
+    pid_t pid_ganador;
+    struct Monedero monederos[MAX_MINEROS];
+    int n_mineros;
+    int n_votos;
+    int n_votos_pos;
+    bool initialised;
     bool flag;
     bool end;
 };

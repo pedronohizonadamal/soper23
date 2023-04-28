@@ -1,26 +1,29 @@
 #include "monitor.h"
 #include "pow.h"
 
-/* NOTA: LOS SEMÁFOROS DEBEN SER SIN NOMBRE Y ESTAR DENTRO DEL SEGMENTO DE MEMORIA COMPARTIDA*/
+struct MemoryQueue *mem_queue = NULL;
+int queue_pos = 0;
+int Interruptions = 0;
+
+void sigint_handler(int sig);
+
 int main(int argc, char **argv)
 {
     bool comprobador = true;
     int shm_mem;
-    int lag;
-    int queue_pos = 0;
+    int lag = 1; //Ya no usamos un parámetro variable; Ahora lag es siempre 1
     int completion_flag = 0;
-    struct MemoryQueue *mem_queue = NULL;
     struct Block block;
     mqd_t queue;
     pid_t pid;
     int status;
+    struct sigaction sigint;
 
-    if (argc != 2)
+    if (argc != 1)
     {
-        printf("Incorrect arguments. Usage: ./monitor <lag>\n");
+        printf("Incorrect arguments. Usage: ./monitor\n");
         exit(EXIT_FAILURE);
     }
-    lag = atoi(argv[1]);
 
     /*Init shared memory*/
     shm_mem = shm_open(SHARED_MEMORY_NAME, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
@@ -100,12 +103,9 @@ int main(int argc, char **argv)
     else
     {
         // Proceso comprobador
-        /*init_semaphores(mutex, queue_space, queue_blocks);*/
-        printf("[%d] Checking blocks...\n", (int)getpid());
 
         /* Message Queue */
         queue = mq_open(MQ_NAME, O_RDONLY, S_IRUSR | S_IWUSR, &attributes);
-
         if (queue == (mqd_t)-1)
         {
             perror("Queue error");
@@ -117,37 +117,57 @@ int main(int argc, char **argv)
             exit(EXIT_FAILURE);
         }
 
+        /*Preparar handlers*/
+        sigint.sa_handler = sigint_handler;
+        sigemptyset(&sigint.sa_mask);
+        sigint.sa_flags= 0;
+        sigaddset(&sigint.sa_mask, SIGINT);
+        /*Assign handler to usr1*/
+        if(sigaction(SIGINT, &sigint, NULL) < 0){
+          perror("sigaction error");
+          munmap(mem_queue, sizeof(struct MemoryQueue));
+          sem_destroy(&mem_queue->mutex);
+          sem_destroy(&mem_queue->queue_space);
+          sem_destroy(&mem_queue->queue_blocks);
+          shm_unlink(SHARED_MEMORY_NAME);
+          mq_close(queue);
+          exit(EXIT_FAILURE);
+        }
+
+        printf("[%d] Checking blocks...\n", (int)getpid());
+
         // Loop until we receive the special completion block
         while (!completion_flag)
         {
-            // Receive a block
-            if (!(receive_block(&block, queue)))
-            {
-                completion_flag = 1;
-            }
+          // Receive a block
+          if (!(receive_block(&block, queue)))
+          {
+              //There was a problem, end
+              block.end = true;
+          }
 
-            // Check if the received block is the special completion block
-            if (block.end == true)
-            {
-                completion_flag = 1;
-            }
-            else
-            {
-                // Comprobar si el bloque es correcto. Añadir al bloque una flag para indicarlo.
-                check_block(&block);
-            }
+          // Check if the received block is the special completion block
+          if (block.end == true)
+          {
+              completion_flag = 1;
+          }
+          else
+          {
+              // Comprobar si el bloque es correcto. Añadir al bloque una flag para indicarlo.
+              check_block(&block);
+          }
 
-            // Insert the block into shared memory
-            sem_wait(&mem_queue->queue_space);
-            sem_wait(&mem_queue->mutex);
-            mem_queue->queue[queue_pos % QUEUE_SIZE] = block;
-            sem_post(&mem_queue->mutex);
-            sem_post(&mem_queue->queue_blocks);
-            queue_pos++;
+          Interruptions = 0; //As the SIG_INT handler utilizes semaphores, we musn't receive interruptions during this
+          SUS: HAY QUE IMPLEMENtAR LAS INTERRuPTIONES(SI LLEGA SEÑAL DURANTE LA ESPERA DE UN SEMÁFORO, SE ESTROPEA LA PROPIA SEÑAL)
 
-            // Wait. Wait isn't needed if about to end
-            if(!completion_flag)
-                sleep(lag);
+          // Insert the block into shared memory
+          insert_block(&block);
+
+          Interruptions = 1;
+
+          // Wait. Wait isn't needed if about to end
+          if(!completion_flag)
+              sleep(lag);
         }
 
         sem_destroy(&mem_queue->mutex);
@@ -171,6 +191,15 @@ int main(int argc, char **argv)
     exit(EXIT_SUCCESS);
 }
 
+void insert_block(struct Block *block){
+  sem_wait(&mem_queue->queue_space);
+  sem_wait(&mem_queue->mutex);
+  mem_queue->queue[queue_pos % QUEUE_SIZE] = *block;
+  sem_post(&mem_queue->mutex);
+  sem_post(&mem_queue->queue_blocks);
+  queue_pos++;
+}
+
 void check_block(struct Block *block)
 {
     if (pow_hash(block->solution) == block->target)
@@ -188,8 +217,8 @@ int receive_block(struct Block *block, mqd_t queue)
 {
     if (mq_receive(queue, (char *)block, sizeof(*block), NULL) == -1)
     {
-        perror("message error");
-        return -1;
+        perror("MQ_receive_error");
+        return 0;
     }
     return 1;
 }
@@ -222,3 +251,32 @@ bool init_semaphores(sem_t *mutex, sem_t *space, sem_t *blocks)
     return true;
 }
 
+void sigint_handler(int sig) {
+  //Asumiendo que no haya problemas
+  struct Block ending;
+  int status;
+
+    //El resto de parámetros nos dan igual
+    ending.end = true;
+    insert_block(&ending);
+
+    //Free resources
+    sem_destroy(&mem_queue->mutex);
+    sem_destroy(&mem_queue->queue_space);
+    sem_destroy(&mem_queue->queue_blocks);
+
+    // Free resources and terminate
+    printf("[%d] Finishing by signal\n", (int)getpid());
+    munmap(mem_queue, sizeof(struct MemoryQueue));
+    shm_unlink(SHARED_MEMORY_NAME);
+    mq_close(queue);
+    mq_unlink(MQ_NAME);
+    //Wait for monitor
+    wait(&status);
+    if(WEXITSTATUS(status) != EXIT_SUCCESS){
+      printf("Warning: monitor exited without EXIT_SUCCESS\n");
+    }
+
+    exit(EXIT_SUCCESS);
+  
+}
