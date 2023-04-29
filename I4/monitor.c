@@ -18,6 +18,7 @@ int main(int argc, char **argv)
     pid_t pid;
     int status;
     struct sigaction sigint;
+    sigset_t block_signals, oldmask;
 
     if (argc != 1)
     {
@@ -121,7 +122,8 @@ int main(int argc, char **argv)
         sigint.sa_handler = sigint_handler;
         sigemptyset(&sigint.sa_mask);
         sigint.sa_flags= 0;
-        sigaddset(&sigint.sa_mask, SIGINT);
+        sigemptyset(&block_signals);
+        sigaddset(&block_signals, SIGINT);
         /*Assign handler to usr1*/
         if(sigaction(SIGINT, &sigint, NULL) < 0){
           perror("sigaction error");
@@ -157,13 +159,12 @@ int main(int argc, char **argv)
               check_block(&block);
           }
 
-          Interruptions = 0; //As the SIG_INT handler utilizes semaphores, we musn't receive interruptions during this
-          SUS: HAY QUE IMPLEMENtAR LAS INTERRuPTIONES(SI LLEGA SEÑAL DURANTE LA ESPERA DE UN SEMÁFORO, SE ESTROPEA LA PROPIA SEÑAL)
-
+          //Block signals during this process
+          sigprocmask(SIG_BLOCK,&block_signals,&oldmask);
           // Insert the block into shared memory
           insert_block(&block);
-
-          Interruptions = 1;
+          //Unblock signals
+          sigprocmask(SIG_UNBLOCK,&oldmask,NULL);
 
           // Wait. Wait isn't needed if about to end
           if(!completion_flag)
