@@ -4,17 +4,17 @@
 struct MemoryQueue *mem_queue = NULL;
 int queue_pos = 0;
 int Interruptions = 0;
+mqd_t queue;
 
 void sigint_handler(int sig);
+void insert_block(struct Block *block);
 
 int main(int argc, char **argv)
 {
-    bool comprobador = true;
     int shm_mem;
     int lag = 1; //Ya no usamos un parámetro variable; Ahora lag es siempre 1
     int completion_flag = 0;
     struct Block block;
-    mqd_t queue;
     pid_t pid;
     int status;
     struct sigaction sigint;
@@ -27,19 +27,18 @@ int main(int argc, char **argv)
     }
 
     /*Init shared memory*/
-    shm_mem = shm_open(SHARED_MEMORY_NAME, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+    shm_mem = shm_open(MONITOR_COMPROBADOR_SHARED_MEMORY, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     if (shm_mem == -1)
     {
-        /*The memory was created, become monitor and open the file*/
-        comprobador = false;
-        shm_mem = shm_open(SHARED_MEMORY_NAME, O_RDWR, S_IRUSR | S_IWUSR);
+        perror("Memory error");
+        exit(EXIT_FAILURE);
     }
 
     //Truncate
     if (ftruncate(shm_mem, sizeof(struct MemoryQueue)) == -1)
     {
         perror("ftruncate");
-        shm_unlink(SHARED_MEMORY_NAME);
+        shm_unlink(MONITOR_COMPROBADOR_SHARED_MEMORY);
         close(shm_mem);
         exit(EXIT_FAILURE);
     }
@@ -49,12 +48,11 @@ int main(int argc, char **argv)
     if (mem_queue == MAP_FAILED)
     {
         perror("mmap");
-        shm_unlink(SHARED_MEMORY_NAME);
+        shm_unlink(MONITOR_COMPROBADOR_SHARED_MEMORY);
         exit(EXIT_FAILURE);
     }
 
     if (init_semaphores(&mem_queue->mutex, &mem_queue->queue_space, &mem_queue->queue_blocks) == false)
-        //Probar con y sin unmap
         exit(EXIT_FAILURE);
 
     pid = fork();
@@ -65,10 +63,15 @@ int main(int argc, char **argv)
         sem_destroy(&mem_queue->mutex);
         sem_destroy(&mem_queue->queue_space);
         sem_destroy(&mem_queue->queue_blocks);
-        shm_unlink(SHARED_MEMORY_NAME);
+        shm_unlink(MONITOR_COMPROBADOR_SHARED_MEMORY);
         exit(EXIT_FAILURE);
     } else if (pid == 0){
         // Proceso monitor
+
+        //Proceso monitor debe blockear todas las señales(excepto KILL y STOP) ya que queremos que finalice por bloque de señalización, y no por un SIGINT dirigido a comprobador
+        sigfillset(&block_signals);
+        sigprocmask(SIG_BLOCK,&block_signals,NULL);
+
         printf("[%d] Printing blocks...\n", (int)getpid());
         // Loop until we receive the special completion block
         while (!completion_flag)
@@ -106,7 +109,7 @@ int main(int argc, char **argv)
         // Proceso comprobador
 
         /* Message Queue */
-        queue = mq_open(MQ_NAME, O_RDONLY, S_IRUSR | S_IWUSR, &attributes);
+        queue = mq_open(MQ_NAME, O_RDONLY | O_CREAT, S_IRUSR | S_IWUSR, &attributes);
         if (queue == (mqd_t)-1)
         {
             perror("Queue error");
@@ -114,7 +117,7 @@ int main(int argc, char **argv)
             sem_destroy(&mem_queue->mutex);
             sem_destroy(&mem_queue->queue_space);
             sem_destroy(&mem_queue->queue_blocks);
-            shm_unlink(SHARED_MEMORY_NAME);
+            shm_unlink(MONITOR_COMPROBADOR_SHARED_MEMORY);
             exit(EXIT_FAILURE);
         }
 
@@ -131,7 +134,7 @@ int main(int argc, char **argv)
           sem_destroy(&mem_queue->mutex);
           sem_destroy(&mem_queue->queue_space);
           sem_destroy(&mem_queue->queue_blocks);
-          shm_unlink(SHARED_MEMORY_NAME);
+          shm_unlink(MONITOR_COMPROBADOR_SHARED_MEMORY);
           mq_close(queue);
           exit(EXIT_FAILURE);
         }
@@ -178,7 +181,7 @@ int main(int argc, char **argv)
     // Free resources and terminate
     printf("[%d] Finishing\n", (int)getpid());
     munmap(mem_queue, sizeof(struct MemoryQueue));
-    shm_unlink(SHARED_MEMORY_NAME);
+    shm_unlink(MONITOR_COMPROBADOR_SHARED_MEMORY);
     mq_close(queue);
     mq_unlink(MQ_NAME);
     //Wait for monitor (if we are not monitor)
@@ -188,7 +191,7 @@ int main(int argc, char **argv)
         printf("Warning: monitor exited without EXIT_SUCCESS\n");
         }
     }
-
+    
     exit(EXIT_SUCCESS);
 }
 
@@ -228,7 +231,7 @@ bool init_semaphores(sem_t *mutex, sem_t *space, sem_t *blocks)
 {
     if (sem_init(mutex, 1, 1) == -1) {
         perror("sem_init");
-        shm_unlink(SHARED_MEMORY_NAME);
+        shm_unlink(MONITOR_COMPROBADOR_SHARED_MEMORY);
         return false;
     }
 
@@ -236,7 +239,7 @@ bool init_semaphores(sem_t *mutex, sem_t *space, sem_t *blocks)
     if (sem_init(space, 1, QUEUE_SIZE) == -1) {
         perror("sem_init");
         sem_destroy(mutex);
-        shm_unlink(SHARED_MEMORY_NAME);
+        shm_unlink(MONITOR_COMPROBADOR_SHARED_MEMORY);
         return false;
     }
 
@@ -245,7 +248,7 @@ bool init_semaphores(sem_t *mutex, sem_t *space, sem_t *blocks)
         perror("sem_init");
         sem_destroy(mutex);
         sem_destroy(space);
-        shm_unlink(SHARED_MEMORY_NAME);
+        shm_unlink(MONITOR_COMPROBADOR_SHARED_MEMORY);
         return false;
     }
 
@@ -253,7 +256,6 @@ bool init_semaphores(sem_t *mutex, sem_t *space, sem_t *blocks)
 }
 
 void sigint_handler(int sig) {
-  //Asumiendo que no haya problemas
   struct Block ending;
   int status;
 
@@ -269,15 +271,15 @@ void sigint_handler(int sig) {
     // Free resources and terminate
     printf("[%d] Finishing by signal\n", (int)getpid());
     munmap(mem_queue, sizeof(struct MemoryQueue));
-    shm_unlink(SHARED_MEMORY_NAME);
+    shm_unlink(MONITOR_COMPROBADOR_SHARED_MEMORY);
     mq_close(queue);
     mq_unlink(MQ_NAME);
     //Wait for monitor
     wait(&status);
     if(WEXITSTATUS(status) != EXIT_SUCCESS){
-      printf("Warning: monitor exited without EXIT_SUCCESS\n");
+        printf("Warning: monitor exited without EXIT_SUCCESS\n");
     }
 
-    exit(EXIT_SUCCESS);
+exit(EXIT_SUCCESS);
   
 }
