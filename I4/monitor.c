@@ -14,6 +14,7 @@ int main(int argc, char **argv)
     int shm_mem;
     int lag = 1; //Ya no usamos un parámetro variable; Ahora lag es siempre 1
     int completion_flag = 0;
+    int i;
     struct Block block;
     pid_t pid;
     int status;
@@ -72,7 +73,6 @@ int main(int argc, char **argv)
         sigfillset(&block_signals);
         sigprocmask(SIG_BLOCK,&block_signals,NULL);
 
-        printf("[%d] Printing blocks...\n", (int)getpid());
         // Loop until we receive the special completion block
         while (!completion_flag)
         {
@@ -90,15 +90,27 @@ int main(int argc, char **argv)
                 completion_flag = 1;
             }
             else
-            {
+            { //Print the block
+                printf("Id:       %04d\n",block.block_id);
+                printf("Winner:   %d\n",block.pid_ganador);
+                printf("Target:   %08ld\n",block.target);
                 if (block.flag == true)
                 {
-                    printf("Solution accepted: %08ld --> %08ld\n", block.target, block.solution);
+                    printf("Solution: %08ld (validated)\n", block.solution);
                 }
                 else
                 {
-                    printf("Solution rejected: %08ld !-> %08ld\n", block.target, block.solution);
+                    printf("Solution: %08ld (invalidated)\n", block.solution);
                 }
+                printf("Votes:    %d/%d\n",block.n_votos_pos,block.n_votos);
+                printf("Wallets:");
+                for(i = 0; i<MAX_MINEROS; i++){
+                    if(block.monederos[i].pid != 0){
+                        printf("  %d:%02d",block.monederos[i].pid,block.monederos[i].monedas);
+                    }
+                }
+                printf("\n\n");
+
                 // Wait
                 sleep(lag);
             }
@@ -139,7 +151,6 @@ int main(int argc, char **argv)
           exit(EXIT_FAILURE);
         }
 
-        printf("[%d] Checking blocks...\n", (int)getpid());
 
         // Loop until we receive the special completion block
         while (!completion_flag)
@@ -179,7 +190,6 @@ int main(int argc, char **argv)
         sem_destroy(&mem_queue->queue_blocks);
     }
     // Free resources and terminate
-    printf("[%d] Finishing\n", (int)getpid());
     munmap(mem_queue, sizeof(struct MemoryQueue));
     shm_unlink(MONITOR_COMPROBADOR_SHARED_MEMORY);
     mq_close(queue);

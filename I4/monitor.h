@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <sys/time.h>
 #include <pthread.h>
+#include <math.h>
 
 #define SHMSZ 27
 #define SHMFILENAME "shmfile.h"
@@ -33,7 +34,7 @@
 #define INITIAL_TARGET 0
 #define MUTEX "voting_shared_mutex"
 #define GANADOR "voting_ganador_perdedor"
-#define MAX_INTENTOS 5
+#define MAX_INTENTOS 2
 
 #define QUEUE_SIZE 5
 
@@ -93,11 +94,15 @@ int receive_block(struct Block *block, mqd_t queue);
 void check_block(struct Block *block);
 void get_sol(long target);
 bool init_semaphores(sem_t *mutex, sem_t *space, sem_t *blocks);
-void init_network (struct Network *network);
-int registrar_pid(struct Network *network);
+void init_network (struct Network *net);
+int registrar_pid(struct Network *net);
 void miner_startup();
-void inicializar_votos(struct Network *network);
+void inicializar_votos(struct Network *net);
 int check_votes();
-void send_block()
+void send_block(struct Block *block);
+void init_block (struct Block *block);
+void new_round_block (struct Block *current_block, struct Block *last_block);
+void close_minero();
+void send_signals(int signal);
 
 #endif
