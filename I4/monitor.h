@@ -18,6 +18,7 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include <math.h>
+#include <string.h>
 
 #define SHMSZ 27
 #define SHMFILENAME "shmfile.h"
@@ -41,6 +42,9 @@
 #define MQ_NAME "/m_queue"
 
 #define MAX_MINEROS 100
+
+#define FILENAME_SIZE 16
+#define FILE_SIZE 1024
 
 struct Monedero {
 
@@ -101,7 +105,37 @@ int check_votes();
 void send_block(struct Block *block);
 void init_block (struct Block *block);
 void new_round_block (struct Block *current_block, struct Block *last_block);
-void close_minero();
+void close_minero(int *pipe_);
 void send_signals(int signal);
+bool init_pipe (int *pipe_);
+int registrador (int *pipe_);
+void miner_rush (int n_seconds, int intentos, int mi_voto, long target, int *pipe_);
+void print_block (FILE *fp, struct Block block);
+
+// Imprime un blocque a fichero
+void print_block (FILE *fp, struct Block block) {
+
+    int i;
+
+    fprintf(fp, "Id:       %04d\n",block.block_id);
+    fprintf(fp, "Winner:   %d\n",block.pid_ganador);
+    fprintf(fp, "Target:   %08ld\n",block.target);
+    if (block.flag == true)
+    {
+        fprintf(fp, "Solution: %08ld (validated)\n", block.solution);
+    }
+    else
+    {
+        fprintf(fp, "Solution: %08ld (invalidated)\n", block.solution);
+    }
+    fprintf(fp, "Votes:    %d/%d\n",block.n_votos_pos,block.n_votos);
+    fprintf(fp, "Wallets:");
+    for(i = 0; i<MAX_MINEROS; i++){
+        if(block.monederos[i].pid != 0){
+            fprintf(fp, "  %d:%02d",block.monederos[i].pid,block.monederos[i].monedas);
+        }
+    }
+    fprintf(fp, "\n\n");
+}
 
 #endif

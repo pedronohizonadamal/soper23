@@ -31,6 +31,8 @@ int main (int argc, char **argv) {
     int intentos;
     int mi_voto;  
     long target;
+    int pipe_to_registrador[2];
+    pid_t pid;
 
     if (argc != 3) {
         printf("Incorrect arguments. Usage: ./miner <N_SECONDS> <N_THREADS>\n");
@@ -43,116 +45,19 @@ int main (int argc, char **argv) {
     n_threads = atoi(argv[2]);
 
     //TO DO: Crear e implementar registrador
+    if (init_pipe(pipe_to_registrador) == false) exit(EXIT_FAILURE);
 
-    miner_startup();
-    //Setup alarm
-    alarm(n_seconds);
-    //No queremos recibir SIGINT ni SIGALARM hasta el final de cada ronda
-    sigprocmask(SIG_BLOCK,&sig_int_alarm,NULL);
+    pid = fork();
 
-    if(first_miner == true){
-        //Enviar SIGUSR1
-        send_signals(SIGUSR1);
-    } else {
-        //Esperar comienzo de ronda
-        sigprocmask(SIG_BLOCK,&sig_usr1,&oldmask);
-            while(usr1_arrived == 0){
-                sigsuspend(&oldmask);
-            }
-            usr1_arrived = 0;
-        sigprocmask(SIG_UNBLOCK,&sig_usr1,NULL);
-    }
-    while(!end){
-        sem_wait(mutex);
-        target = network->current_block.target;
-        sem_post(mutex);
+    if (pid == -1) exit(EXIT_FAILURE);
 
-        solution = -1;
-        get_sol(target);
+    // Proceso Registrador
+    if (pid == 0) registrador(pipe_to_registrador);
 
-        if(!(sem_trywait(ganador))){
-            //Proceso ganador
-            
-            //Preparar votación
-            sem_wait(mutex);
-            network->current_block.solution = solution;
-            network->current_block.pid_ganador = getpid();
-            inicializar_votos(network);
-            sem_post(mutex);
-
-            //enviar USR2
-            send_signals(SIGUSR2);
-            
-            //Comprobar votación
-            intentos = 0;
-            while(intentos < MAX_INTENTOS){
-                sleep(1);
-                if(check_votes())
-                    break;
-                intentos++;
-            }
-
-            sem_wait(mutex);
-            if(network->current_block.n_votos_pos*2 >= network->current_block.n_votos){
-                network->monederos[network_id].monedas++; //Si hemos ganado, sumar una moneda
-            }
-            //Copiar monederos al bloque actual
-            for(int i=0;i<MAX_MINEROS; i++){
-                network->current_block.monederos[i] = network->monederos[i];
-            }
-            //Enviar bloque
-            send_block(&network->current_block);
-            //Preparar siguiente ronda
-            new_round_block(&network->current_block,&network->last_block);
-            sem_post(mutex);
-            sem_post(ganador);  
-            //TO DO:Enviar al Registrador por pipe
-
-            //Enviar Usr1
-            send_signals(SIGUSR1);
-
-
-        } else {
-            //Proceso perdedor
-
-            //Esperar USR2
-            sigprocmask(SIG_BLOCK,&sig_usr2,&oldmask);
-                while(usr2_arrived == 0){
-                    sigsuspend(&oldmask);
-                }
-                usr2_arrived = 0;
-            sigprocmask(SIG_UNBLOCK,&sig_usr2,NULL);
-
-            //Votar
-            sem_wait(mutex);
-            if (pow_hash(network->current_block.solution) == network->current_block.target){
-                mi_voto = 1;
-            } else {
-                mi_voto = -1;
-            }
-            network->votos[network_id] = mi_voto;
-            sem_post(mutex);
-            
-            //TO DO: Enviar al Registrador por pipe
-
-            //Esperar USR1
-            sigprocmask(SIG_BLOCK,&sig_usr1,&oldmask);
-                while(usr1_arrived == 0){
-                    sigsuspend(&oldmask);
-                }
-                usr1_arrived = 0;
-            sigprocmask(SIG_UNBLOCK,&sig_usr1,NULL);
-        }
-
-        //Comprobar si ha llegado la alarma o SIGINT
-        sigprocmask(SIG_UNBLOCK,&sig_int_alarm,NULL);
-        if(end){
-            close_minero();
-        }
-        sigprocmask(SIG_BLOCK,&sig_int_alarm,NULL);
-    }
+    // Proceso Minero
+    else miner_rush(n_seconds, intentos, mi_voto, target, pipe_to_registrador);
     
-    close_minero();
+
     exit(EXIT_SUCCESS);
 }
 
@@ -265,9 +170,10 @@ void miner_startup(){
     return;
 }
 
-void close_minero(){
+void close_minero(int *pipe_){
     int mineros_activos = 0;
     int i;
+    int status;
     struct Block finish;
     sem_wait(mutex);
     for(i = 0; i<MAX_MINEROS; i++){
@@ -298,6 +204,13 @@ void close_minero(){
         /*TO DO:"espera la finalización de su proceso Registrador, quien debe detectar el cierre de la
 tuber ́ıa, e imprime un mensaje de aviso en el caso de que no termine con el c ́odigo de salida
 EXIT_SUCCESS"*/
+        close(pipe_[1]);
+        wait(&status);
+
+        if(WEXITSTATUS(status) != EXIT_SUCCESS){
+        printf("Warning: registrador exited without EXIT_SUCCESS\n");
+        }
+        
         exit(EXIT_SUCCESS);
     }
 }
@@ -503,3 +416,156 @@ void send_signals(int signal){
     return;
 }
 //TO DO: modularizar todas las funciones (separarlas en diferentes .c en función de su categoría)
+
+//Función que iniciliza el pipe
+bool init_pipe (int *pipe_) {
+    if(pipe(pipe_) == -1) {
+        perror("Pipe error\n");
+        return false;
+    }
+    return true;
+}
+
+// Funcion que implementa el proceso registrador
+int registrador (int *pipe_) {
+
+    char filename[FILENAME_SIZE];
+    FILE *fp = NULL;
+    
+    close(pipe_[1]);
+
+    snprintf(filename, sizeof(filename), "log_%d", getppid());
+
+    if ((fp = fopen(filename, "w")) == NULL ) {
+        perror("CRITICAL ERROR OPENING FILE\n");
+        return EXIT_FAILURE;
+    }
+
+    while (read(pipe_[0],&network->current_block,sizeof(struct Block)) != 0) {
+    
+        print_block(fp, network->current_block);
+
+        if (network->current_block.end == true) break;
+    }
+
+    fclose(fp);
+    close(pipe_[0]);
+
+    return EXIT_SUCCESS;
+}
+
+// Función que implementa el proceso minero
+void miner_rush (int n_seconds, int intentos, int mi_voto, long target, int *pipe_) {
+    miner_startup();
+    close(pipe_[0]);
+    //Setup alarm
+    alarm(n_seconds);
+    //No queremos recibir SIGINT ni SIGALARM hasta el final de cada ronda
+    sigprocmask(SIG_BLOCK,&sig_int_alarm,NULL);
+
+    if(first_miner == true){
+        //Enviar SIGUSR1
+        send_signals(SIGUSR1);
+    } else {
+        //Esperar comienzo de ronda
+        sigprocmask(SIG_BLOCK,&sig_usr1,&oldmask);
+            while(usr1_arrived == 0){
+                sigsuspend(&oldmask);
+            }
+            usr1_arrived = 0;
+        sigprocmask(SIG_UNBLOCK,&sig_usr1,NULL);
+    }
+    while(!end){
+        sem_wait(mutex);
+        target = network->current_block.target;
+        sem_post(mutex);
+
+        solution = -1;
+        get_sol(target);
+
+        if(!(sem_trywait(ganador))){
+            //Proceso ganador
+            
+            //Preparar votación
+            sem_wait(mutex);
+            network->current_block.solution = solution;
+            network->current_block.pid_ganador = getpid();
+            inicializar_votos(network);
+            sem_post(mutex);
+
+            //enviar USR2
+            send_signals(SIGUSR2);
+            
+            //Comprobar votación
+            intentos = 0;
+            while(intentos < MAX_INTENTOS){
+                sleep(1);
+                if(check_votes())
+                    break;
+                intentos++;
+            }
+
+            sem_wait(mutex);
+            if(network->current_block.n_votos_pos*2 >= network->current_block.n_votos){
+                network->monederos[network_id].monedas++; //Si hemos ganado, sumar una moneda
+            }
+            //Copiar monederos al bloque actual
+            for(int i=0;i<MAX_MINEROS; i++){
+                network->current_block.monederos[i] = network->monederos[i];
+            }
+            //Enviar bloque
+            send_block(&network->current_block);
+            //Preparar siguiente ronda
+            new_round_block(&network->current_block,&network->last_block);
+            sem_post(mutex);
+            sem_post(ganador);  
+            //TO DO:Enviar al Registrador por pipe
+            write(pipe_[1], &network->current_block, sizeof(struct Block));
+
+            //Enviar Usr1
+            send_signals(SIGUSR1);
+
+
+        } else {
+            //Proceso perdedor
+
+            //Esperar USR2
+            sigprocmask(SIG_BLOCK,&sig_usr2,&oldmask);
+                while(usr2_arrived == 0){
+                    sigsuspend(&oldmask);
+                }
+                usr2_arrived = 0;
+            sigprocmask(SIG_UNBLOCK,&sig_usr2,NULL);
+
+            //Votar
+            sem_wait(mutex);
+            if (pow_hash(network->current_block.solution) == network->current_block.target){
+                mi_voto = 1;
+            } else {
+                mi_voto = -1;
+            }
+            network->votos[network_id] = mi_voto;
+            sem_post(mutex);
+            
+            //TO DO: Enviar al Registrador por pipe
+            write(pipe_[1], &network->current_block, sizeof(struct Block));
+
+            //Esperar USR1
+            sigprocmask(SIG_BLOCK,&sig_usr1,&oldmask);
+                while(usr1_arrived == 0){
+                    sigsuspend(&oldmask);
+                }
+                usr1_arrived = 0;
+            sigprocmask(SIG_UNBLOCK,&sig_usr1,NULL);
+        }
+
+        //Comprobar si ha llegado la alarma o SIGINT
+        sigprocmask(SIG_UNBLOCK,&sig_int_alarm,NULL);
+        if(end){
+            close_minero(pipe_);
+        }
+        sigprocmask(SIG_BLOCK,&sig_int_alarm,NULL);
+    }
+    
+    close_minero(pipe_);
+}
