@@ -57,7 +57,6 @@ struct Block{
     struct Monedero monederos[MAX_MINEROS];
     int n_votos;
     int n_votos_pos;
-    bool initialised;
     bool flag;
     bool end;
 };

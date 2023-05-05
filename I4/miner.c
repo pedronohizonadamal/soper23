@@ -285,12 +285,15 @@ void close_minero(){
         sem_close(mutex);
         exit(EXIT_SUCCESS);
     } else { //Soy el último minero
+        init_block(&finish);
         finish.end = true;
         send_block(&finish); //enviar bloque de finalización si el monitor existe
         shm_unlink(MINER_NETWORK);
+        sem_close(ganador);
         sem_unlink(GANADOR);
         munmap(&network,sizeof(struct Network));
         sem_post(mutex);
+        sem_close(mutex);
         sem_unlink(MUTEX);
         /*TO DO:"espera la finalización de su proceso Registrador, quien debe detectar el cierre de la
 tuber ́ıa, e imprime un mensaje de aviso en el caso de que no termine con el c ́odigo de salida
@@ -359,11 +362,17 @@ void get_sol(long target){
 }
 
 void init_block (struct Block *block) {
+    int i;
     block->block_id = 0;
     block->target = 0;
+    block->solution = 0;
     block->n_votos = 0;
+    block->pid_ganador = 0;
+    for(i = 0; i<MAX_MINEROS; i++){
+        block->monederos[i].monedas = 0;
+        block->monederos[i].pid = 0;
+    }
     block->n_votos_pos = 0;
-    block->initialised = true;
     block->flag = false;
     block->end = false;
 }
@@ -463,7 +472,7 @@ int check_votes(){
 
 void send_block(struct Block *block){
     mqd_t queue;
-    struct timespec time = {2, 500};
+    struct timespec time = {1, 500};
     // Crear cola de mensajes
     queue = mq_open(MQ_NAME, O_WRONLY, S_IRUSR | S_IWUSR, &attributes);
 
