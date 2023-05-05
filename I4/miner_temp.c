@@ -1,5 +1,6 @@
 #include "pow.h"
 #include "monitor.h"
+#include <string.h>
 
 sem_t *mutex, *ganador;
 struct Network *network;
@@ -11,7 +12,6 @@ int network_id;
 int usr1_arrived = 0;
 int usr2_arrived = 0;
 int end = 0;
-
 
 
 void sigusr1_handler(int sig){
@@ -38,7 +38,7 @@ int main (int argc, char **argv) {
     int pipeToRegister[2];
     struct Block block;
     int i;
-    char file_output[1024];
+    char file_output[1024], str_aux[1024];
     FILE *block_register = NULL;
     
     
@@ -87,27 +87,33 @@ int main (int argc, char **argv) {
 
             sigprocmask(SIG_UNBLOCK,&sig_int_alarm,NULL);
             
-            if (2 * block.n_votos_pos > block.n_votos)
-                strcat(file_output, "Id:\t%d\nWinner:\t%d\n\
+            if (2 * block.n_votos_pos > block.n_votos) {
+                sprintf(str_aux, "Id:\t%d\nWinner:\t%d\n\
                                     Target:\t%ld\nSolution:\t%ld (validated)\n\
                                     Votes:\t%d/%d\nWallets:\t", 
                                     network->current_block.block_id, block.pid_ganador,
                                     block.target, block.solution,
                                     block.n_votos_pos, block.n_votos);
-            else 
-                strcat(file_output, "Id:\t%d\nWinner:\t%d\n\
+                strcat(file_output, str_aux);
+            }
+            else {
+                sprintf(str_aux, "Id:\t%d\nWinner:\t%d\n\
                                     Target:\t%ld\nSolution:\t%ld (rejected)\n\
                                     Votes:\t%d/%d\nWallets:\t", 
                                     network->current_block.block_id, block.pid_ganador,
                                     block.target, block.solution,
                                     block.n_votos_pos, block.n_votos);
+                strcat(file_output, str_aux);
+            }
 
             for (i = 0; i < block.n_votos; i++) {
-                strcat(file_output, "%d:%d ", block.monederos[i].pid, block.monederos[i].monedas);
+                sprintf(str_aux, "%d:%d ", block.monederos[i].pid, block.monederos[i].monedas);
+                strcat(file_output, str_aux);
             }
-            strcat(file_output, "\n");
+            sprintf(str_aux, "\n");
+            strcat(file_output, str_aux);
 
-            dprintf(block_register, "%s", file_output);
+            fprintf(block_register, "%s", file_output);
 
             sigprocmask(SIG_BLOCK,&sig_int_alarm,NULL);
 
@@ -150,7 +156,7 @@ int main (int argc, char **argv) {
 
             if(!(sem_trywait(ganador))){
                 //Proceso ganador
-                
+                printf("PID:%d\n", getpid());
                 //Preparar votación
                 sem_wait(mutex);
                 network->current_block.solution = solution;
@@ -225,6 +231,8 @@ int main (int argc, char **argv) {
             //Comprobar si ha llegado la alarma o SIGINT
             sigprocmask(SIG_UNBLOCK,&sig_int_alarm,NULL);
 
+
+
             write(pipeToRegister[1],&(network->current_block),sizeof(struct Block));
 
             if(end){
@@ -245,7 +253,6 @@ int main (int argc, char **argv) {
 void miner_startup(){
     int shm_mem;
     struct sigaction act;
-    int id_local;
 
     if((mutex = sem_open(MUTEX, O_CREAT, S_IRUSR | S_IWUSR ,1))==SEM_FAILED){
         perror("mutex semaphore error");
@@ -387,7 +394,7 @@ EXIT_SUCCESS"*/
 
 void *search(void *s){
     long int i;
-    int not_found = -1;
+    int not_found = -1; 
     struct Search_space search = *(struct Search_space*)s;
     
     for(i = search.lower; i<search.upper && solution==-1; i++){
