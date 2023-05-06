@@ -12,7 +12,7 @@ int registrador(int *pipe_) {
     snprintf(filename, sizeof(filename), "log_%d", getppid());
 
     if ((fp = fopen(filename, "w")) == NULL ) {
-        perror("CRITICAL ERROR OPENING FILE\n");
+        perror("file error");
         return EXIT_FAILURE;
     }
 

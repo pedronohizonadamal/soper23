@@ -31,18 +31,18 @@ void sigusr1_handler(int sig);
 void sigusr2_handler(int sig);
 void sigint_sigalarm_handler(int sig);
 
-void get_sol(long target); //M
-void init_network (struct Network *net); //M
-int registrar_pid(struct Network *net); //M
-void miner_startup(); //M
-void inicializar_votos(struct Network *net); //M
-int check_votes(); //M
-void send_block(struct Block *block); //M
-void init_block (struct Block *block); //M
-void new_round_block (struct Block *current_block, struct Block *last_block); //M
-void close_minero(int *pipe_); //MN
-void send_signals(int signal); //M
-void miner_rush (int n_seconds, int intentos, int mi_voto, long target, int *pipe_); //M
+void get_sol(long target); 
+void init_network (struct Network *net); 
+int registrar_pid(struct Network *net); 
+void miner_startup(); 
+void inicializar_votos(struct Network *net); 
+int check_votes(); 
+void send_block(struct Block *block); 
+void init_block (struct Block *block); 
+void new_round_block (struct Block *current_block, struct Block *last_block);
+void close_minero(int *pipe_);
+void send_signals(int signal);
+void miner_rush (int n_seconds, int *pipe_);
 void *search(void *s);
 bool init_pipe (int *pipe_);
 

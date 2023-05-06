@@ -28,9 +28,6 @@ void sigint_sigalarm_handler(int sig){
 
 int main (int argc, char **argv) {
     int n_seconds;
-    int intentos;
-    int mi_voto;  
-    long target;
     int pipe_to_registrador[2];
     pid_t pid;
 
@@ -55,7 +52,7 @@ int main (int argc, char **argv) {
     if (pid == 0) registrador(pipe_to_registrador);
 
     // Proceso Minero
-    else miner_rush(n_seconds, intentos, mi_voto, target, pipe_to_registrador);
+    else miner_rush(n_seconds, pipe_to_registrador);
     
 
     exit(EXIT_SUCCESS);
@@ -189,6 +186,13 @@ void close_minero(int *pipe_){
         sem_post(mutex);
         sem_close(ganador);
         sem_close(mutex);
+        //Esperar registrador
+        close(pipe_[1]);
+        wait(&status);
+
+        if(WEXITSTATUS(status) != EXIT_SUCCESS){
+        printf("Warning: registrador exited without EXIT_SUCCESS\n");
+        }
         exit(EXIT_SUCCESS);
     } else { //Soy el último minero
         init_block(&finish);
@@ -201,9 +205,7 @@ void close_minero(int *pipe_){
         sem_post(mutex);
         sem_close(mutex);
         sem_unlink(MUTEX);
-        /*TO DO:"espera la finalización de su proceso Registrador, quien debe detectar el cierre de la
-tuber ́ıa, e imprime un mensaje de aviso en el caso de que no termine con el c ́odigo de salida
-EXIT_SUCCESS"*/
+        //Esperar registrador
         close(pipe_[1]);
         wait(&status);
 
@@ -401,6 +403,10 @@ int check_votes(){
 void send_block(struct Block *block){
     mqd_t queue;
     struct timespec time = {1, 500};
+    struct mq_attr attributes = {. mq_flags = 0 ,
+    . mq_maxmsg = 7 ,
+    . mq_curmsgs = 0 ,
+    . mq_msgsize = sizeof ( struct Block ) };
     // Crear cola de mensajes
     queue = mq_open(MQ_NAME, O_WRONLY, S_IRUSR | S_IWUSR, &attributes);
 
@@ -430,10 +436,12 @@ void send_signals(int signal){
     }
     return;
 }
-//TO DO: modularizar todas las funciones (separarlas en diferentes .c en función de su categoría)
 
 // Función que implementa el proceso minero
-void miner_rush (int n_seconds, int intentos, int mi_voto, long target, int *pipe_) {
+void miner_rush (int n_seconds, int *pipe_) {
+    int mi_voto = 0;
+    long target;
+    int intentos;
     miner_startup();
     close(pipe_[0]);
     //Setup alarm

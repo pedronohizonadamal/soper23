@@ -12,9 +12,6 @@
 #define MINER_CANDIDATE_QUEUE_OUT "miner_candidate_multiplex_out"
 #define MONITOR_COMPROBADOR_SHARED_MEMORY "monitor_shmem"
 
-struct MemoryQueue *mem_queue = NULL;
-int queue_pos = 0;
-
-bool init_semaphores(sem_t *mutex, sem_t *space, sem_t *blocks); 
+bool init_semaphores(sem_t *mutex, sem_t *space, sem_t *blocks);
 
 #endif
