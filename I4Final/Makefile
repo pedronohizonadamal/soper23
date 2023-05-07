@@ -21,7 +21,6 @@ $(MIN): miner.o register.o pow.o miner_rush.o
 
 
 restore:
-	rm log_*
 	rm /dev/shm/miner_network
 	rm /dev/shm/sem.voting*
 	rm /dev/mqueue/*
